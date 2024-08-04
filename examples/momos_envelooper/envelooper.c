@@ -332,8 +332,6 @@ int main()
 	uint8_t pin_d1 = 0;
 	uint8_t pin_d1_last = 0;
 
-	memset(env, 0, 8);
-
 	printf("Module is up and running.\n\r");
 
 	while(1)
@@ -344,8 +342,8 @@ int main()
 				// Encoder downwards
 				if (bar_mode) {
 					// Select the next lower bar
-					if (bar > 0) {
-						bar--;
+					if (bar < 7) {
+						bar++;
 					}
 				} else {
 					// Decrease envelope value of the selected bar
@@ -357,8 +355,8 @@ int main()
 				// Encoder upwards
 				if (bar_mode) {
 					// Select the next higher bar
-					if(bar < 7) {
-						bar++;
+					if(bar > 0) {
+						bar--;
 					}
 				} else {
 					// Increase envelope value of the selected bar
@@ -379,14 +377,6 @@ int main()
 		}
 		pin_d1_last = pin_d1;
 
-		// Set the PW of the PWM output, according to the bars
-		if (bar_out_enable > 0) {
-			bar_out_enable--;
-		} else {
-			bar_out_enable = 7;
-		}
-		// t1pwm_setpw((uint16_t) 255-(env[bar_out_enable]*32));
-
 		// Draw the bars onto the OLED display
 		ssd1306_setbuf(0);
 		ssd1306_drawRect(2,0,10,env[0]*8,1);
@@ -401,6 +391,6 @@ int main()
 		ssd1306_refresh();
 
 		// Delay the loop for the encoder input (no debounce code!)
-		Delay_Ms(50);
+		Delay_Ms(200);
 	}
 }
