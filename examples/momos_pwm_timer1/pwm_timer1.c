@@ -1,33 +1,22 @@
 /*
  * ---------------------------------------
- * MoMoS Envelooper - Mossys Modular Synths
+ * MoMoS LFO with PWM on TIMER1 - Mossys Modular Synths
  * ---------------------------------------
- * The base of this code is developed from examples 
- * in the ch32v003fun Github repo by cnlohr:
+ * The base of this code is developed from examples in the
+ * ch32v003fun Github repo by cnlohr.
  * https://github.com/cnlohr/ch32v003fun
- * The license is MIT and is contained inside the repo.
- * 
- * Author: Thorsten Knoll - tknl.de
- * Date: 07/2024
- *
- * Inputs:
- * - PD3, PD4: Rotary encoder input
- * - PD6: Rotary encoder button
- *
- * Outputs:
- * - PC1: OLED I2C SDA
- * - PC2: OLED I2C SCL
- * - PD0: PWM envelope output
+ * The license is MIT and is contained in the repo.
  */
 
-// what type of OLED
-#define SSD1306_128X64
+/*
+Inputs:
+- PD2 pin: Analog input 1 (Frequency)
+Outputs:
+- PD0 pin: PWM output (Low Frequency Oscillator)
+*/
 
 #include "ch32v003fun.h"
-#include "ch32v003_GPIO_branchless.h"
 #include <stdio.h>
-#include "ssd1306_i2c.h"
-#include "ssd1306.h"
 
 // --------------------------
 // TIMER DEFINES + VARS
@@ -57,50 +46,16 @@ volatile uint16_t adc_single;
 volatile uint32_t systick_cnt;
 volatile uint32_t adc_systick;
 
-volatile uint8_t env[8];
-
 uint8_t wavetable[256] = {127, 130, 133, 136, 139, 142, 145, 148, 151, 154, 157, 160, 163, 166, 169, 172, 175, 178, 181, 184, 186, 189, 192, 194, 197, 200, 202, 205, 207, 209, 212, 214, 216, 218, 221, 223, 225, 227, 229, 230, 232, 234, 235, 237, 239, 240, 241, 243, 244, 245, 246, 247, 248, 249, 250, 250, 251, 252, 252, 253, 253, 253, 253, 253, 254, 253, 253, 253, 253, 253, 252, 252, 251, 250, 250, 249, 248, 247, 246, 245, 244, 243, 241, 240, 239, 237, 235, 234, 232, 230, 229, 227, 225, 223, 221, 218, 216, 214, 212, 209, 207, 205, 202, 200, 197, 194, 192, 189, 186, 184, 181, 178, 175, 172, 169, 166, 163, 160, 157, 154, 151, 148, 145, 142, 139, 136, 133, 130, 127, 124, 121, 118, 115, 112, 109, 106, 103, 100, 97, 94, 91, 88, 85, 82, 79, 76, 73, 70, 68, 65, 62, 60, 57, 54, 52, 49, 47, 45, 42, 40, 38, 36, 33, 31, 29, 27, 25, 24, 22, 20, 19, 17, 15, 14, 13, 11, 10, 9, 8, 7, 6, 5, 4, 4, 3, 2, 2, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 2, 2, 3, 4, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 17, 19, 20, 22, 24, 25, 27, 29, 31, 33, 36, 38, 40, 42, 45, 47, 49, 52, 54, 57, 60, 62, 65, 68, 70, 73, 76, 79, 82, 85, 88, 91, 94, 97, 100, 103, 106, 109, 112, 115, 118, 121, 124};
 
-
-/******************************************************************************************
- * initialize TIM2 for Encoder Input
- ******************************************************************************************/
-void t2encoder_init( void )
+void print_module_info( void )
 {
-	// Enable GPIOD, TIM2, and AFIO *very important!*
-	RCC->APB2PCENR |= RCC_APB2Periph_AFIO | RCC_APB2Periph_GPIOD;
-	RCC->APB1PCENR |= RCC_APB1Periph_TIM2;
-
-	AFIO->PCFR1 |= AFIO_PCFR1_TIM2_REMAP_NOREMAP; //set partial remap mode to NOREMAP
-
-	// PD4 is T2CH1_, Input w/ Pullup/down
-	GPIOD->CFGLR &= ~(0xf<<(4*4)); //clear old values
-	GPIOD->CFGLR |= (GPIO_CNF_IN_PUPD)<<(4*4); //set new ones
-	// 1 = pull-up, 0 = pull-down
-	GPIOD->OUTDR |= 0<<4;
-
-	// PD3 is T2CH2_, Input w/ Pullup/down
-	GPIOD->CFGLR &= ~(0xf<<(4*3)); //clear values
-	GPIOD->CFGLR |= (GPIO_CNF_IN_PUPD)<<(4*3); //set new ones
-	// 1 = pull-up, 0 = pull-down
-	GPIOD->OUTDR |= 0<<3;
-
-	// Reset TIM2 to init all regs
-	RCC->APB1PRSTR |= RCC_APB1Periph_TIM2;
-	RCC->APB1PRSTR &= ~RCC_APB1Periph_TIM2;
-
-	// SMCFGR: set encoder mode SMS=010b
-	TIM2->SMCFGR |= TIM_EncoderMode_TI2;
-
-	// initialize timer
-	TIM2->SWEVGR |= TIM_UG;
-
-	// set count to about mid-scale to avoid wrap-around
-	TIM2->CNT = 0x8fff;
-
-	// Enable TIM2
-	TIM2->CTLR1 |= TIM_CEN;
-};
+	printf("\r\r\n\n");
+	printf("-----------------------------------------\n\r");
+	printf("| MoMoS LFO with PWM on TIMER1          |\n\r");
+	printf("| Mossys Modular Synths by T.Knoll 2023 |\n\r");
+	printf("-----------------------------------------\n\r");
+}
 
 /******************************************************************************************
  * initialize TIM1 for PWM Out
@@ -144,14 +99,6 @@ void t1pwm_init( void )
 	
 	// Enable TIM1
 	TIM1->CTLR1 |= TIM_CEN;
-}
-
-/******************************************************************************************
- * Set pulsewidth (PW) for timer 1
- ******************************************************************************************/
-void t1pwm_setpw(uint16_t width)
-{
-	TIM1->CH1CVR = width;
 }
 
 /*
@@ -256,151 +203,48 @@ void SysTick_Handler(void) __attribute__((interrupt));
 void SysTick_Handler(void)
 {
 
-	adc_systick = ((adc_buffer[0]+4)*8192);
+	adc_systick = ((adc_buffer[0]+4)*1024);
 	SysTick->CMP += adc_systick;
 
 	/* clear IRQ */
 	SysTick->SR = 0;
 
 	/* update counter */
-	systick_cnt--;
-	systick_cnt&=7;
-	TIM1->CH1CVR = 255-(env[systick_cnt]*32);
-	// TIM1->CH1CVR = (env[systick_cnt]*32);
+	systick_cnt++;
+	systick_cnt++;
+	systick_cnt&=255;
+	TIM1->CH1CVR = wavetable[systick_cnt];
 }
 
+/*
+ * entry
+ */
 int main()
 {
-	// Initsystem  with 48MHz internal clock
 	SystemInit();
-	Delay_Ms( 200 );
+	Delay_Ms( 100 );
 
-	// Say Hello over UART
-	printf("\r\n");
-	printf("-----------------\n\r");
-	printf("Envelooper Module\n\r");
-	printf("by MoMoS in 2024\n\r");
-	printf("-----------------\n\r");
-	printf("\r\n");
+	print_module_info();
 
-	// Init Encoder with Timer 2 on PD3 and PD4
-	printf("Initializing Encoder input on GPIO PD3 and PD4.\n\r");
-	t2encoder_init();
-    Delay_Ms( 100 );
-	uint16_t last_count = TIM2->CNT;
-    uint16_t count = TIM2->CNT;
-
-	// Init Encoder Button on PD6
-	printf("Initializing Encoder Button input on GPIO PD6.\n\r");
-	GPIO_port_enable(GPIO_port_D);
-	GPIO_pinMode(GPIOv_from_PORT_PIN(GPIO_port_D, 6), GPIO_pinMode_I_pullUp, GPIO_Speed_In);
-
-	// Init PWM output with Timer 1 on PD0
-	printf("Initializing PWM output on GPIO PD0\n\r");
+	// Init TIM1 for PWM
+	printf("Initializing PWM...");
 	t1pwm_init();
-    Delay_Ms( 100 );
+	printf("Done.\n\r");
 
 	// Init ADC
 	printf("Initializing ADC...");
 	adc_init();
-    Delay_Ms( 100 );
 	printf("done.\n\r");
 	
 	// Init systick
 	printf("initializing systick...");
 	systick_init();
-    Delay_Ms( 100 );
 	printf("done.\n\r");
-	
-	// init OLED display with I2C on PC1 and PC2
-	printf("Initializing OLED display on GPIO PC1 and PC2\n\r");
-	uint8_t err = ssd1306_i2c_init();
-	if (err != 0) {
-		printf("Init failed\n\r");
-	}
-	Delay_Ms( 100 );
-	err = ssd1306_init();
-	if (err != 0) {
-		printf("Init failed\n\r");
-	}
-	Delay_Ms( 100 );
 
-	// Variables
-	uint8_t bar = 0;
-	uint8_t bar_mode = 0;
-	uint8_t bar_out_enable = 0;
-	uint8_t pin_d1 = 0;
-	uint8_t pin_d1_last = 0;
-
-	memset(env, 0, 8);
-
-	printf("Module is up and running.\n\r");
-
+	printf("Module is running.\n\r");
 	while(1)
 	{
-		// Handle the rotary encoder input
-		if( count != last_count) {
-			if ((count-last_count)<0) {
-				// Encoder downwards
-				if (bar_mode) {
-					// Select the next lower bar
-					if (bar > 0) {
-						bar--;
-					}
-				} else {
-					// Decrease envelope value of the selected bar
-					if (env[bar] > 0) {
-						env[bar]--;
-					}
-				}
-			} else {
-				// Encoder upwards
-				if (bar_mode) {
-					// Select the next higher bar
-					if(bar < 7) {
-						bar++;
-					}
-				} else {
-					// Increase envelope value of the selected bar
-					if (env[bar] < 7) {
-						env[bar]++;
-					}
-				}
-			}
-			count = TIM2->CNT;
-			last_count = count;
-		}
-		count = TIM2->CNT;
-
-		// Handle the Encoder Button
-		pin_d1 = !GPIO_digitalRead(GPIOv_from_PORT_PIN(GPIO_port_D, 6));
-		if (pin_d1 && !pin_d1_last){
-			bar_mode = !bar_mode;
-		}
-		pin_d1_last = pin_d1;
-
-		// Set the PW of the PWM output, according to the bars
-		if (bar_out_enable > 0) {
-			bar_out_enable--;
-		} else {
-			bar_out_enable = 7;
-		}
-		// t1pwm_setpw((uint16_t) 255-(env[bar_out_enable]*32));
-
-		// Draw the bars onto the OLED display
-		ssd1306_setbuf(0);
-		ssd1306_drawRect(2,0,10,env[0]*8,1);
-		ssd1306_drawRect(18,0,10,env[1]*8,1);
-		ssd1306_drawRect(34,0,10,env[2]*8,1);
-		ssd1306_drawRect(50,0,10,env[3]*8,1);
-		ssd1306_drawRect(66,0,10,env[4]*8,1);
-		ssd1306_drawRect(82,0,10,env[5]*8,1);
-		ssd1306_drawRect(98,0,10,env[6]*8,1);
-		ssd1306_drawRect(114,0,10,env[7]*8,1);
-		ssd1306_xorrect(1+bar*16,0,12,64);
-		ssd1306_refresh();
-
-		// Delay the loop for the encoder input (no debounce code!)
-		Delay_Ms(50);
+		Delay_Ms( 100 );
+		printf("Still running. ADC ch#1: %u\n\r", ((adc_buffer[0]+4)*1024));
 	}
 }
